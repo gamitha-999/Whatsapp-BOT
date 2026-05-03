@@ -1,56 +1,68 @@
 # WhatsApp Bot Mr_Gamiya
 
-Simple WhatsApp bot that auto-reacts to statuses and has basic commands.
+Simple WhatsApp bot with group management, anti-badword system, and auto-reaction.
 
 ## Features
-- Auto-react `🐣` to statuses (5-10 seconds delay).
-- `.ping` command to check if the bot is alive.
-- Session persistence (no need to scan QR code every time).
+- **Auto-Reaction:** Reacts `🐣` to statuses (5 seconds delay).
+- **Connection Alert:** Sends a success message when connected.
+- **Group Management:** Owner-only commands to manage group participants.
+- **Anti-Badword:** Automatically deletes messages containing bad words and warns the user.
+- **Session Persistence:** Remembers your login so you don't scan every time.
+
+## Commands
+
+### Public Commands
+- `.ping` - Check if the bot is alive.
+- `.help` - Show all available commands.
+
+### Owner Commands
+- `.add <number>` - Add a person to the group (e.g., `.add 94722xxxxxx`).
+- `.remove <tag/number>` - Remove a person from the group.
+- `.promote <tag/number>` - Make a person an admin.
+- `.demote <tag/number>` - Remove admin rights from a person.
+
+---
 
 ## Installation & Setup
 
 ### 1. Requirements
-- **Node.js:** v18 or higher (LTS recommended)
-- **Git:** To clone/manage the repository
+- **Node.js:** v18 or higher
+- **Git:** To clone the repository
 
-### 2. Local Setup (Windows/Mac)
-1. Install Node.js from [nodejs.org](https://nodejs.org/).
-2. Open your terminal and run:
+### 2. Local Setup
+1. Clone the repository:
    ```bash
-   # Clone the repository
    git clone https://github.com/gamitha-999/Whatsapp-BOT.git
    cd Whatsapp-BOT
-
-   # Install dependencies
+   ```
+2. Install dependencies:
+   ```bash
    npm install
    ```
 3. Run the bot:
    ```bash
    node index.js
    ```
-4. Scan the QR code with your WhatsApp.
 
 ---
 
 ## VPS Deployment (Ubuntu/Debian)
 
-### 1. Install Node.js
-Copy and paste these commands into your VPS terminal:
+### 1. System Update & Node.js Installation
 ```bash
 sudo apt update && sudo apt upgrade -y
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs
+sudo apt-get install -y nodejs git
 ```
 
-### 2. Install Git and Project
+### 2. Project Setup
 ```bash
-sudo apt-get install -y git
 git clone https://github.com/gamitha-999/Whatsapp-BOT.git
 cd Whatsapp-BOT
 npm install
 ```
 
-### 3. Keep it Running 24/7 (Using PM2)
+### 3. Run 24/7 with PM2
 ```bash
 sudo npm install -g pm2
 pm2 start index.js --name "wa-bot"
@@ -58,23 +70,11 @@ pm2 save
 pm2 startup
 ```
 
-### 4. Useful Commands
-- `pm2 logs` - Check real-time logs (to see the QR code if needed)
-- `pm2 restart wa-bot` - Restart the bot
-- `pm2 stop wa-bot` - Stop the bot
-
 ---
 
-## Dependencies (package.json)
-The bot uses the following libraries:
-- `@whiskeysockets/baileys`: Core WhatsApp API
-- `pino`: Logger for Baileys
-- `qrcode-terminal`: To display QR code in terminal
-- `@hapi/boom`: For error handling
+## Configuration
+Open `index.js` to modify:
+- `owners`: Add your WhatsApp numbers (with country code).
+- `badwords`: Add words you want to block in groups.
 
----
-
-## Troubleshooting
-- **QR Code not appearing?** Run `node index.js` manually or check `pm2 logs`.
-- **Bot not reacting to status?** Ensure your phone is connected to the internet.
-- **Permission issues?** Use `sudo` for global npm installs or file modifications.
+> Created by Mr_Gamiya
