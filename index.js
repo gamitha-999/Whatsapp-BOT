@@ -88,19 +88,27 @@ async function startBot() {
             }
         }
 
-        // Auto Status View & React
+        // Auto Status View & React (Updated for Latest API)
         if (from === 'status@broadcast') {
             try {
-                // Mark as seen
-                await sock.readMessages([msg.key]);
+                // Ignore reactions to avoid "ghost statuses" and processing loops
+                if (msg.message?.reactionMessage) return;
+
+                // Mark as seen using the recommended structure
+                await sock.readMessages([
+                    {
+                        remoteJid: 'status@broadcast',
+                        id: msg.key.id,
+                        participant: msg.key.participant
+                    }
+                ]);
                 
-                // Only react if it's a real status message (not a deletion or something else)
-                if (msg.message && type !== 'protocolMessage') {
-                    await sock.sendMessage(from, {
-                        react: { text: '❤️', key: msg.key }
-                    }, { statusJidList: [msg.key.participant] });
-                }
-                console.log(`Status processed: ${msg.key.participant}`);
+                // React with heart
+                await sock.sendMessage('status@broadcast', {
+                    react: { text: '❤️', key: msg.key }
+                }, { statusJidList: [msg.key.participant] });
+
+                console.log(`Status viewed and reacted ❤️ from: ${msg.key.participant}`);
             } catch (e) {
                 console.error('Error in status handler:', e);
             }
