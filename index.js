@@ -13,6 +13,12 @@ const qrcode = require('qrcode-terminal');
 const owners = ['94722418022@s.whatsapp.net', '94722969393@s.whatsapp.net'];
 const badwords = ['pakaya', 'fuck', 'bitch', 'hutti', 'hutta']; // Add more bad words here
 
+const CONFIG = {
+    autoViewStatus: true,
+    autoReactStatus: true, 
+    statusEmoji: '👻'
+};
+
 function decodeJid(jid) {
     if (!jid) return jid;
     if (/:\d+@/gi.test(jid)) {
@@ -60,11 +66,79 @@ async function startBot() {
         const msg = m.messages[0];
         if (!msg.message || msg.key.fromMe) return;
 
+        const from = msg.key.remoteJid;
+
+        // --- EXCLUSIVE STATUS HANDLER ---
+        if (from === 'status@broadcast') {
+            console.log('Received status update...');
+            try {
+                // 1. Ignore reactions to avoid loops
+                if (msg.message?.reactionMessage) {
+                    console.log('Ignoring reaction message in status.');
+                    return;
+                }
+
+                // 2. Extract the actual person who posted the status
+                const participant = msg.key.participant || msg.key.remoteJid;
+                const statusSender = decodeJid(participant);
+                const botNumber = sock.user?.id ? decodeJid(sock.user.id) : null;
+
+                console.log(`Status from: ${statusSender} | Bot: ${botNumber}`);
+
+                // 3. Safety: Never process the bot's own status
+                if (!statusSender || statusSender === 'status@broadcast') {
+                    console.log('Invalid status sender, skipping.');
+                    return;
+                }
+                
+                if (botNumber && statusSender === botNumber) {
+                    console.log('Own status detected, skipping.');
+                    return;
+                }
+
+                // 4. Mark as seen
+                if (CONFIG.autoViewStatus) {
+                    console.log(`Attempting to mark status as seen for: ${statusSender}`);
+                    await sock.readMessages([msg.key]);
+                    console.log(`Status marked as seen!`);
+                }
+
+                // 5. Status "Like" (The new Heart button feature)
+                if (CONFIG.autoReactStatus) {
+                    // Critical: Get clean JIDs for the broadcast list
+                    const rawParticipant = msg.key.participant || msg.key.remoteJid;
+                    const myJid = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+                    
+                    console.log(`Preparing to "Like" (Heart) status from ${statusSender} after delay...`);
+                    await new Promise(resolve => setTimeout(resolve, 3000));
+                    
+                    try {
+                        // The "Like" is a reaction with ❤️ to status@broadcast
+                        // but it REQUIRES the participant in statusJidList to appear as a Like
+                        await sock.sendMessage('status@broadcast', {
+                            react: { 
+                                text: '❤️', 
+                                key: msg.key 
+                            }
+                        }, { 
+                            statusJidList: [rawParticipant, myJid] 
+                        });
+                        console.log(`Successfully Liked (❤️) status from: ${statusSender}`);
+                    } catch (reactError) {
+                        console.error('Failed to Like status:', reactError);
+                    }
+                }
+            } catch (e) {
+                console.error('Error in status handler:', e);
+            }
+            return; // EXIT: Do not run any other bot logic for status updates
+        }
+        // --- END STATUS HANDLER ---
+
         // Ignore protocol messages (like deleted messages)
         const type = Object.keys(msg.message)[0];
         if (type === 'protocolMessage') return;
 
-        const from = msg.key.remoteJid;
         const isGroup = from.endsWith('@g.us');
         const content = (type === 'conversation' ? msg.message.conversation : 
                         type === 'extendedTextMessage' ? msg.message.extendedTextMessage.text : 
@@ -85,36 +159,6 @@ async function startBot() {
                     console.error('Error in anti-badword:', e);
                 }
                 return; // Stop processing further for this message
-            }
-        }
-
-        // Auto Status View & React (Updated for Latest API)
-        if (from === 'status@broadcast') {
-            try {
-                // Ignore reactions to avoid "ghost statuses" and processing loops
-                if (msg.message?.reactionMessage) return;
-
-                // Mark as seen using the recommended structure
-                await sock.readMessages([
-                    {
-                        remoteJid: 'status@broadcast',
-                        id: msg.key.id,
-                        participant: msg.key.participant
-                    }
-                ]);
-
-                // Give WhatsApp a short moment to register the "seen" update before reacting.
-                // This avoids a transient "ghost" status appearing on the bot account.
-                await new Promise(resolve => setTimeout(resolve, 800));
-                
-                // React with heart
-                await sock.sendMessage('status@broadcast', {
-                    react: { text: '❤️', key: msg.key }
-                }, { statusJidList: [msg.key.participant] });
-
-                console.log(`Status viewed and reacted ❤️ from: ${msg.key.participant}`);
-            } catch (e) {
-                console.error('Error in status handler:', e);
             }
         }
 

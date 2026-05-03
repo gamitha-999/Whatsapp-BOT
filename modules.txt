@@ -1,0 +1,10 @@
+Required Modules for VPS Setup:
+
+1. @whiskeysockets/baileys
+2. pino
+3. qrcode-terminal
+4. @hapi/boom
+
+To install all modules at once, run this command in your VPS terminal:
+
+npm install @whiskeysockets/baileys pino qrcode-terminal @hapi/boom
