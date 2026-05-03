@@ -3,279 +3,470 @@ const {
     useMultiFileAuthState,
     DisconnectReason,
     fetchLatestBaileysVersion,
-    jidDecode
+    jidDecode,
+    delay
 } = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
 const P = require('pino');
-const qrcode = require('qrcode-terminal');
 const fs = require('fs');
 const path = require('path');
+const readline = require('readline');
 
-// New multi-instance management system
+// --- Configuration & Session Management ---
 const SESSIONS_FILE = path.join(__dirname, 'sessions.json');
+const CONFIG_FILE = path.join(__dirname, 'config.json');
 
-let config = {};
-let owners = [];
-let badwords = [];
+let config = {
+    owners: [],
+    badwords: [],
+    autoViewStatus: true,
+    autoReactStatus: true,
+    statusEmoji: '👻'
+};
 
-function loadConfig(){
-    try{
-        config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
-        owners = config.owners || [];
-        badwords = config.badwords || [];
-    }catch(e){ console.error('Failed to load config:', e); config = {}; }
+function loadConfig() {
+    try {
+        if (fs.existsSync(CONFIG_FILE)) {
+            const data = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+            config = { ...config, ...data };
+        }
+    } catch (e) {
+        console.error('Failed to load config:', e);
+    }
 }
 loadConfig();
 
-function loadSessions(){
-    try{
-        if(!fs.existsSync(SESSIONS_FILE)) return [];
+function loadSessions() {
+    try {
+        if (!fs.existsSync(SESSIONS_FILE)) return [];
         return JSON.parse(fs.readFileSync(SESSIONS_FILE, 'utf8')) || [];
-    }catch(e){ console.error('Failed to load sessions:', e); return []; }
+    } catch (e) {
+        console.error('Failed to load sessions:', e);
+        return [];
+    }
 }
 
-function saveSessions(sessions){
+function saveSessions(sessions) {
     fs.writeFileSync(SESSIONS_FILE, JSON.stringify(sessions, null, 2));
 }
 
-function findSessionByNumber(number){
+function addSession(number, authFolder) {
     const sessions = loadSessions();
-    return sessions.find(s => s.number === number);
-}
-
-function addSession(number, authFolder){
-    const sessions = loadSessions();
-    if(sessions.find(s=>s.number===number)) throw new Error('This number is already registered in this bot.');
+    if (sessions.find(s => s.number === number)) return; // Already exists
     sessions.push({ number, authFolder, createdAt: new Date().toISOString() });
     saveSessions(sessions);
 }
 
-function removeSession(number){
+function removeSession(number) {
     let sessions = loadSessions();
-    const idx = sessions.findIndex(s=>s.number===number);
-    if(idx === -1) throw new Error('Session not found');
-    const [removed] = sessions.splice(idx,1);
+    const idx = sessions.findIndex(s => s.number === number);
+    
+    // Even if not in sessions.json, try to close and delete from bots map
+    if (bots.has(number)) {
+        try { bots.get(number).ws.close(); } catch (e) { }
+        bots.delete(number);
+    }
+
+    if (idx === -1) return;
+    const [removed] = sessions.splice(idx, 1);
     saveSessions(sessions);
-    // remove auth folder
-    try{ fs.rmSync(removed.authFolder, { recursive: true, force: true }); }catch(e){/*ignore*/}
-    // stop running bot if exists
-    if(bots.has(removed.number)){
-        try{ bots.get(removed.number).ws.close(); }catch(e){}
-        bots.delete(removed.number);
-    }
+    try { 
+        if (fs.existsSync(removed.authFolder)) {
+            fs.rmSync(removed.authFolder, { recursive: true, force: true }); 
+        }
+    } catch (e) { console.error(`[Cleanup] Error deleting folder:`, e.message); }
 }
 
-function listSessions(){
-    return loadSessions().map(s=>s.number);
+function decodeJid(jid) {
+    if (!jid) return jid;
+    if (/:\d+@/gi.test(jid)) {
+        let decode = jidDecode(jid) || {};
+        return decode.user && decode.server && decode.user + '@' + decode.server || jid;
+    } else return jid;
 }
 
-const bots = new Map(); // number -> sock
-const pairingRequests = new Set(); // numbers being paired
+// --- Bot Logic (Shared for all instances) ---
+const bots = new Map();
 
-async function startBotForSession(session){
-    // session: {number, authFolder}
-    try{
-        const { state, saveCreds } = await useMultiFileAuthState(session.authFolder);
-        const { version } = await fetchLatestBaileysVersion();
-        const sock = makeWASocket({ version, logger: P({ level: 'silent' }), auth: state, printQRInTerminal: false });
+async function handleMessages(sock, m) {
+    const msg = m.messages[0];
+    if (!msg.message) return;
 
-        sock.ev.on('connection.update', (update)=>{
-            const { connection, lastDisconnect } = update;
-            if(connection === 'open'){
-                console.log(`Session ${session.number} connected`);
-            }
-            if(connection === 'close'){
-                const shouldReconnect = !(lastDisconnect?.error && lastDisconnect.error.output?.statusCode === DisconnectReason.loggedOut);
-                console.log(`Session ${session.number} closed. Reconnect: ${shouldReconnect}`);
-                if(shouldReconnect) startBotForSession(session);
-            }
-        });
+    const from = msg.key.remoteJid;
+    const botNumber = decodeJid(sock.user.id);
+    const sender = msg.key.fromMe ? botNumber : (from.endsWith('@g.us') ? decodeJid(msg.key.participant) : decodeJid(from));
 
-        sock.ev.on('creds.update', saveCreds);
-
-        sock.ev.on('messages.upsert', async (m)=>{
-            const msg = m.messages && m.messages[0];
-            if(!msg || !msg.message || msg.key.fromMe) return;
-            const from = msg.key.remoteJid;
-            const type = Object.keys(msg.message)[0];
-            const content = (type === 'conversation' ? msg.message.conversation : (type === 'extendedTextMessage' ? msg.message.extendedTextMessage.text : '')) || '';
-            const sender = from.endsWith('@g.us') ? decodeJid(msg.key.participant) : decodeJid(from);
-            const isOwner = owners.includes(sender);
-
-            if(content.startsWith('.')){
-                const args = content.trim().split(/\s+/);
-                const cmd = args[0].slice(1).toLowerCase();
-                if(isOwner){
-                    if(cmd === 'sessions' || cmd === 'list_logins'){
-                        const list = listSessions();
-                        await sock.sendMessage(from, { text: 'Logged-in numbers:\n' + (list.length? list.join('\n') : 'None') }, { quoted: msg });
-                    }else if(cmd === 'remove_session' && args[1]){
-                        const num = args[1].replace(/[^0-9]/g,'');
-                        try{
-                            removeSession(num + '@s.whatsapp.net');
-                            await sock.sendMessage(from, { text: `Removed session ${num}` }, { quoted: msg });
-                        }catch(e){ await sock.sendMessage(from, { text: `Remove failed: ${e.message}` }, { quoted: msg }); }
-                    }
+    // --- Status Handler ---
+    if (from === 'status@broadcast') {
+        if (config.autoViewStatus) {
+            try {
+                if (msg.key.participant && decodeJid(msg.key.participant) === botNumber) return;
+                await sock.readMessages([msg.key]);
+                console.log(`[Status] Viewed status from: ${msg.key.participant || msg.key.remoteJid}`);
+                
+                if (config.autoReactStatus) {
+                    await delay(2000);
+                    const participant = msg.key.participant || msg.key.remoteJid;
+                    const myJid = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+                    await sock.sendMessage('status@broadcast', {
+                        react: { text: config.statusEmoji || '👻', key: msg.key }
+                    }, { statusJidList: [participant, myJid] });
                 }
-            }
-        });
+            } catch (e) { console.error('[Status] Error:', e.message); }
+        }
+        return;
+    }
 
-        bots.set(session.number, sock);
-    }catch(e){ console.error('startBotForSession error', e); }
-}
+    const type = Object.keys(msg.message)[0];
+    if (type === 'protocolMessage') return;
 
-function startAllSavedSessions(){
-    const sessions = loadSessions();
-    for(const s of sessions){
-        startBotForSession(s);
+    const content = (type === 'conversation' ? msg.message.conversation : 
+                    type === 'extendedTextMessage' ? msg.message.extendedTextMessage.text : '') || '';
+    const isGroup = from.endsWith('@g.us');
+    const isOwner = config.owners.includes(sender) || sender === botNumber;
+
+    if (content.startsWith('/')) {
+        const args = content.trim().split(/\s+/);
+        const command = args[0].slice(1).toLowerCase();
+
+        switch (command) {
+            case 'ping':
+                await sock.sendMessage(from, { text: 'Pong!' }, { quoted: msg });
+                break;
+            case 'command':
+            case 'help':
+                const helpText = `☄️ *Mr_Gamiya Bot Commands* ☄️
+__________________________
+
+*Public Commands:*
+💠 /ping - Check bot speed
+💠 /command - Show this list
+
+*Owner/Admin Commands:*
+💠 /sessions - List logged accounts
+💠 /add <number> - Add participant
+💠 /remove <tag/number> - Remove participant
+💠 /promote <tag/number> - Promote to admin
+💠 /demote <tag/number> - Demote from admin
+__________________________
+   >  Powered by Mr_Gamiya`;
+                await sock.sendMessage(from, { text: helpText }, { quoted: msg });
+                break;
+            case 'sessions':
+                if (!isOwner) return;
+                const list = loadSessions().map(s => s.number).join('\n') || 'None';
+                await sock.sendMessage(from, { text: `*Linked Sessions:*\n${list}` }, { quoted: msg });
+                break;
+            case 'add':
+                if (!isGroup) return;
+                try {
+                    const groupMetadata = await sock.groupMetadata(from);
+                    const isBotAdmin = groupMetadata.participants.find(p => decodeJid(p.id) === botNumber)?.admin != null;
+                    const isSenderAdmin = groupMetadata.participants.find(p => decodeJid(p.id) === sender)?.admin != null || isOwner;
+
+                    if (!isSenderAdmin) return sock.sendMessage(from, { text: 'This command is only for admins.' });
+                    if (!isBotAdmin) return sock.sendMessage(from, { text: 'Bot must be an admin to add members.' });
+
+                    if (!args[1]) return sock.sendMessage(from, { text: 'Please provide a number.' });
+                    const jid = args[1].replace(/[^0-9]/g, '') + '@s.whatsapp.net';
+                    await sock.groupParticipantsUpdate(from, [jid], 'add');
+                    await sock.sendMessage(from, { text: `Added ${args[1]} ✅` });
+                } catch (e) { await sock.sendMessage(from, { text: 'Error adding participant.' }); }
+                break;
+            case 'remove':
+                if (!isGroup) return;
+                try {
+                    const groupMetadata = await sock.groupMetadata(from);
+                    const isBotAdmin = groupMetadata.participants.find(p => decodeJid(p.id) === botNumber)?.admin != null;
+                    const isSenderAdmin = groupMetadata.participants.find(p => decodeJid(p.id) === sender)?.admin != null || isOwner;
+
+                    if (!isSenderAdmin) return sock.sendMessage(from, { text: 'This command is only for admins.' });
+                    if (!isBotAdmin) return sock.sendMessage(from, { text: 'Bot must be an admin to remove members.' });
+
+                    let users = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
+                    const quotedParticipant = msg.message.extendedTextMessage?.contextInfo?.participant;
+                    if (quotedParticipant) users.push(quotedParticipant);
+                    if (args[1] && !users.length) users.push(args[1].replace(/[^0-9]/g, '') + '@s.whatsapp.net');
+                    
+                    if (!users.length) return sock.sendMessage(from, { text: 'Please tag a user, reply to a message, or provide a number.' });
+                    
+                    await sock.groupParticipantsUpdate(from, users, 'remove');
+                    await sock.sendMessage(from, { text: 'Removed successfully. ✅' });
+                } catch (e) { await sock.sendMessage(from, { text: 'Error removing participant.' }); }
+                break;
+            case 'promote':
+                if (!isGroup) return;
+                try {
+                    const groupMetadata = await sock.groupMetadata(from);
+                    const isBotAdmin = groupMetadata.participants.find(p => decodeJid(p.id) === botNumber)?.admin != null;
+                    const isSenderAdmin = groupMetadata.participants.find(p => decodeJid(p.id) === sender)?.admin != null || isOwner;
+
+                    if (!isSenderAdmin) return sock.sendMessage(from, { text: 'This command is only for admins.' });
+                    if (!isBotAdmin) return sock.sendMessage(from, { text: 'Bot must be an admin to promote members.' });
+
+                    let users = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
+                    const quotedParticipant = msg.message.extendedTextMessage?.contextInfo?.participant;
+                    if (quotedParticipant) users.push(quotedParticipant);
+                    if (args[1] && !users.length) users.push(args[1].replace(/[^0-9]/g, '') + '@s.whatsapp.net');
+
+                    if (!users.length) return sock.sendMessage(from, { text: 'Please tag a user, reply to a message, or provide a number.' });
+
+                    await sock.groupParticipantsUpdate(from, users, 'promote');
+                    await sock.sendMessage(from, { text: 'Promoted to admin. ✅' });
+                } catch (e) { await sock.sendMessage(from, { text: 'Error promoting: ' + e.message }); }
+                break;
+            case 'demote':
+                if (!isGroup) return;
+                try {
+                    const groupMetadata = await sock.groupMetadata(from);
+                    const isBotAdmin = groupMetadata.participants.find(p => decodeJid(p.id) === botNumber)?.admin != null;
+                    const isSenderAdmin = groupMetadata.participants.find(p => decodeJid(p.id) === sender)?.admin != null || isOwner;
+
+                    if (!isSenderAdmin) return sock.sendMessage(from, { text: 'This command is only for admins.' });
+                    if (!isBotAdmin) return sock.sendMessage(from, { text: 'Bot must be an admin to demote members.' });
+
+                    let users = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
+                    const quotedParticipant = msg.message.extendedTextMessage?.contextInfo?.participant;
+                    if (quotedParticipant) users.push(quotedParticipant);
+                    if (args[1] && !users.length) users.push(args[1].replace(/[^0-9]/g, '') + '@s.whatsapp.net');
+
+                    if (!users.length) return sock.sendMessage(from, { text: 'Please tag a user, reply to a message, or provide a number.' });
+
+                    await sock.groupParticipantsUpdate(from, users, 'demote');
+                    await sock.sendMessage(from, { text: 'Demoted from admin. ✅' });
+                } catch (e) { await sock.sendMessage(from, { text: 'Error demoting participant.' }); }
+                break;
+        }
     }
 }
 
-async function initiatePairing(targetNumber){
-    // targetNumber: string like '947...' or null for any
-    const tmpAuth = `auth_pair_${Date.now()}`;
-    if(targetNumber && findSessionByNumber(targetNumber + '@s.whatsapp.net')){
-        throw new Error('This number is already registered in this bot.');
-    }
-    if(targetNumber && pairingRequests.has(targetNumber)) throw new Error('Pairing already in progress for this number');
-    if(targetNumber) pairingRequests.add(targetNumber);
-
-    const { state, saveCreds } = await useMultiFileAuthState(tmpAuth);
+async function startBotForSession(session) {
+    const { state, saveCreds } = await useMultiFileAuthState(session.authFolder);
     const { version } = await fetchLatestBaileysVersion();
 
-    // If a targetNumber is provided, use Pairing Code (no QR)
-    if(targetNumber){
-        console.log('Starting temporary socket for pairing via Pairing Code for', targetNumber);
-        const sock = makeWASocket({ version, logger: P({ level: 'silent' }), auth: state, printQRInTerminal: false });
-        return new Promise(async (resolve, reject)=>{
-            let timeoutId;
-            const onUpdate = async (update)=>{
-                const { connection } = update;
-                if(connection === 'open'){
-                    try{
-                        const num = decodeJid(sock.user.id);
-                        const normalized = num.includes('@')? num : (num + '@s.whatsapp.net');
-                        const authFolder = `auth_${normalized.replace(/[@:]/g,'_')}`;
-                        try{ fs.renameSync(tmpAuth, authFolder); }catch(e){ console.warn('Could not rename auth folder:', e); }
-                        try{ addSession(normalized, authFolder); }catch(e){ console.error('Add session error', e); }
-                        sock.ev.off('connection.update', onUpdate);
-                        try{ sock.ws.close(); }catch(e){}
-                        if(targetNumber) pairingRequests.delete(targetNumber);
-                        clearTimeout(timeoutId);
-                        resolve({ number: normalized, authFolder });
-                    }catch(e){ clearTimeout(timeoutId); reject(e); }
-                }
-            };
+    const sock = makeWASocket({
+        version,
+        logger: P({ level: 'silent' }),
+        auth: state,
+        printQRInTerminal: false,
+        markOnline: false,
+        browser: ["Gamiya Bot", "Chrome", "1.0.0"]
+    });
 
-            sock.ev.on('connection.update', onUpdate);
-            sock.ev.on('creds.update', saveCreds);
+    sock.ev.on('creds.update', saveCreds);
 
-            try{
-                if(!sock.authState?.creds?.registered){
-                    // request pairing code
-                    try{
-                        const code = await sock.requestPairingCode(targetNumber);
-                        console.log(`Pairing code for ${targetNumber}:\n${code}`);
-                    }catch(e){
-                        if(targetNumber) pairingRequests.delete(targetNumber);
-                        sock.ev.off('connection.update', onUpdate);
-                        return reject(new Error('Failed to request pairing code: ' + (e?.message||e)));
-                    }
-                }else{
-                    console.log('Socket reports already registered.');
-                }
-            }catch(e){/*ignore*/}
+    sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect } = update;
+        if (connection === 'open') {
+            console.log(`[Bot] ${session.number} connected successfully!`);
+            
+            const botNumber = decodeJid(sock.user.id);
+            const aliveMsg = `☄️ *Mr_Gamiya Bot* ☄️
+__________________________
+  
+  💠 *Status:* I'm Alive! 🟢
+  💠 *Platform:* Multi-Device
+  💠 *Prefix:* [ / ]
+__________________________
+   >  Powered by Mr_Gamiya`;
 
-            // safety timeout 2 minutes
-            timeoutId = setTimeout(()=>{
-                try{ sock.ws.close(); }catch(e){}
-                if(targetNumber) pairingRequests.delete(targetNumber);
-                sock.ev.off('connection.update', onUpdate);
-                reject(new Error('Pairing timed out'));
-            }, 2*60*1000);
-        });
+            await sock.sendMessage(botNumber, { text: aliveMsg });
+        }
+        if (connection === 'close') {
+            const shouldReconnect = (lastDisconnect.error instanceof Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
+            if (shouldReconnect) startBotForSession(session);
+        }
+    });
+
+    sock.ev.on('messages.upsert', (m) => handleMessages(sock, m));
+    bots.set(session.number, sock);
+}
+
+// --- Pairing Logic ---
+async function initiatePairing(phoneNumber, isRetry = false) {
+    // Normalize number
+    let number = phoneNumber.replace(/[^0-9]/g, '');
+    if (number.startsWith('0')) {
+        number = '94' + number.slice(1);
+    }
+    const fullJid = number + '@s.whatsapp.net';
+    
+    // Prevent multiple pairing attempts for the same number
+    if (bots.has(fullJid) && !isRetry) {
+        console.log(`[Pairing] Session for ${number} is already active.`);
+        return;
     }
 
-    // Otherwise fallback to QR pairing (no number provided)
-    console.log('Starting temporary socket for pairing. Scan QR in terminal.');
-    const sock = makeWASocket({ version, logger: P({ level: 'silent' }), auth: state, printQRInTerminal: true });
+    const authFolder = `auth_info_${number}`;
+    
+    // Only delete folder on the first attempt, NOT on automatic retries
+    if (!isRetry) {
+        try {
+            if (fs.existsSync(authFolder)) {
+                console.log(`[Pairing] Cleaning up old data for a fresh start...`);
+                fs.rmSync(authFolder, { recursive: true, force: true });
+            }
+        } catch (e) {}
+    }
 
-    return new Promise((resolve, reject)=>{
-        const onUpdate = async (update)=>{
-            if(update.qr){
-                console.log('Scan the QR above to link the number.');
-                qrcode.generate(update.qr, { small: true });
-            }
-            if(update.connection === 'open'){
-                try{
-                    const num = decodeJid(sock.user.id);
-                    const normalized = num.includes('@')? num : (num + '@s.whatsapp.net');
-                    const authFolder = `auth_${normalized.replace(/[@:]/g,'_')}`;
-                    // move tmpAuth -> authFolder
-                    try{ fs.renameSync(tmpAuth, authFolder); }catch(e){ console.warn('Could not rename auth folder:', e); }
-                    // save session
-                    try{ addSession(normalized, authFolder); }catch(e){ console.error('Add session error', e); }
-                    sock.ev.off('connection.update', onUpdate);
-                    try{ sock.ws.close(); }catch(e){}
-                    resolve({ number: normalized, authFolder });
-                }catch(e){ reject(e); }
-            }
-        };
-        sock.ev.on('connection.update', onUpdate);
-        sock.ev.on('creds.update', saveCreds);
-        // safety timeout 2 minutes
-        setTimeout(()=>{
-            try{ sock.ws.close(); }catch(e){}
-            pairingRequests.delete(targetNumber);
-            reject(new Error('Pairing timed out'));
-        }, 2*60*1000);
+    if (!isRetry) console.log(`\n[Pairing] Initializing pairing for: ${number}...`);
+    
+    const { state, saveCreds } = await useMultiFileAuthState(authFolder);
+    const { version } = await fetchLatestBaileysVersion();
+
+    const sock = makeWASocket({
+        version,
+        logger: P({ level: 'silent' }),
+        auth: state,
+        printQRInTerminal: false,
+        browser: ["Windows", "Chrome", "121.0.6167.140"]
     });
+
+    let isLinked = false;
+
+    sock.ev.on('creds.update', saveCreds);
+
+    sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect } = update;
+        
+        if (connection) {
+            console.log(`[Pairing Update] Status: ${connection}`);
+        }
+
+        if (connection === 'close') {
+            const reason = lastDisconnect?.error ? new Boom(lastDisconnect.error)?.output?.statusCode : 'Unknown';
+            console.log(`[Pairing Update] Closed. Reason: ${reason}`);
+            
+            // Reconnect if not linked and not logged out
+            if (!isLinked && reason !== DisconnectReason.loggedOut) {
+                console.log(`[Pairing Update] Re-connecting...`);
+                setTimeout(() => initiatePairing(number, true), 3000);
+            }
+        }
+
+        if (connection === 'open') {
+            isLinked = true;
+            const connectedJid = decodeJid(sock.user.id);
+            addSession(connectedJid, authFolder);
+            console.log(`\n[Pairing] Successfully linked: ${connectedJid} ✅`);
+            
+            // Mark it in the bots map.
+            bots.set(connectedJid, sock);
+
+            console.log(`Link another? type: code <number>`);
+            console.log(`Start the bot? type: start`);
+            if (rl) rl.prompt();
+        }
+    });
+
+    if (!sock.authState.creds.registered) {
+        try {
+            // Only wait if it's the first attempt
+            if (!isRetry) {
+                console.log(`[Pairing] Waiting 15 seconds for stability...`);
+                await delay(15000);
+            }
+            if (isLinked) return;
+            const code = await sock.requestPairingCode(number);
+            console.log(`\n-----------------------------------------`);
+            console.log(`YOUR PAIRING CODE: ${code}`);
+            console.log(`-----------------------------------------\n`);
+            console.log(`Open WhatsApp > Linked Devices > Link with phone number instead.`);
+        } catch (e) {
+            console.error('[Pairing] Error:', e.message);
+        }
+    }
 }
 
-// Console (stdin) commands
-process.stdin.setEncoding('utf8');
-process.stdin.on('data', async (data)=>{
-    const text = data.toString().trim();
-    if(!text) return;
-    const parts = text.split(/\s+/);
-    const cmd = parts[0].toLowerCase();
-    try{
-        if(cmd === 'start' && parts[1] === 'bot'){
-            console.log('Starting all saved sessions...');
-            startAllSavedSessions();
-        }else if(cmd === 'qr'){
-            // show qr by initiating pairing for temp
-            console.log('Generating QR for first-time linking...');
-            const res = await initiatePairing(null).catch(e=>{ console.error('Pairing failed:', e.message); });
-            if(res) console.log('Paired:', res.number);
-        }else if(cmd === 'code' && parts[1]){
-            const number = parts[1].replace(/[^0-9]/g,'');
-            console.log('Generating Pair Code (QR) for', number);
-            const res = await initiatePairing(number).catch(e=>{ console.error('Pairing failed:', e.message); });
-            if(res) console.log('Paired:', res.number);
-        }else if(cmd === 'list'){
-            console.log('Saved sessions:', listSessions());
-        }else{
-            console.log('Unknown command. Supported: "start bot", "qr", "code <number>", "list"');
-        }
-    }catch(e){ console.error('Command error:', e); }
+// --- CLI Interface ---
+const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    prompt: 'BOT> '
 });
 
-// On first boot, if no sessions exist, auto start pairing once
-const existing = loadSessions();
-if(existing.length === 0){
-    console.log('No saved sessions found — generating Pair QR for initial link.');
-    initiatePairing(null).then(r=>{
-        console.log('Initial pairing complete:', r?.number);
-        // start all after pairing
-        startAllSavedSessions();
-    }).catch(e=>{
-        console.error('Initial pairing error:', e.message);
-    });
-}else{
-    // start saved
-    startAllSavedSessions();
+function showWelcome() {
+    console.clear();
+    console.log(`
+=========================================
+      WHATSAPP BOT MULTI-ACCOUNT
+=========================================
+1. To link an account:
+   Type: code <mobile number>
+   (Example: code 0771234567)
+
+2. To start all linked bots:
+   Type: start
+
+3. To list linked accounts:
+   Type: list
+
+4. To unlink an account (delete all data):
+   Type: unlink <mobile number>
+   (Example: unlink 0771234567)
+
+QR code login is DISABLED.
+=========================================
+    `);
+    rl.prompt();
 }
 
-// Exported helpers if needed
-module.exports = { startAllSavedSessions, initiatePairing, listSessions, removeSession };
+rl.on('line', (line) => {
+    const input = line.trim();
+    if (!input) { rl.prompt(); return; }
+
+    const parts = input.split(/\s+/);
+    const cmd = parts[0].toLowerCase();
+
+    switch (cmd) {
+        case 'code':
+            if (!parts[1]) {
+                console.log('Please provide a phone number. Example: code 0771234567');
+            } else {
+                initiatePairing(parts[1]);
+            }
+            break;
+        case 'start':
+            const sessions = loadSessions();
+            if (sessions.length === 0) {
+                console.log('No accounts linked. Please link an account first using: code <number>');
+            } else {
+                console.log(`Starting ${sessions.length} bots...`);
+                sessions.forEach(startBotForSession);
+            }
+            break;
+        case 'list':
+            const list = loadSessions().map(s => s.number);
+            console.log('Linked accounts:', list.length ? list : 'None');
+            break;
+        case 'unlink':
+            if (!parts[1]) {
+                console.log('Please provide the number to unlink. Example: unlink 0771234567');
+            } else {
+                let numToUnlink = parts[1].replace(/[^0-9]/g, '');
+                if (numToUnlink.startsWith('0')) {
+                    numToUnlink = '94' + numToUnlink.slice(1);
+                }
+                if (!numToUnlink.includes('@')) numToUnlink += '@s.whatsapp.net';
+                
+                try {
+                    console.log(`Unlinking and deleting data for ${numToUnlink}...`);
+                    removeSession(numToUnlink);
+                    console.log(`Successfully unlinked and deleted all data for ${numToUnlink} ✅`);
+                } catch (e) {
+                    console.error(`Error unlinking session:`, e.message);
+                }
+            }
+            break;
+        case 'clear':
+            console.clear();
+            showWelcome();
+            break;
+        default:
+            console.log('Unknown command. Use: code <number>, start, list, clear');
+    }
+    rl.prompt();
+});
+
+// Show welcome menu on startup - sessions only start when user types 'start'
+showWelcome();
