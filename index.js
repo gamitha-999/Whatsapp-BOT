@@ -16,7 +16,6 @@ async function startBot() {
     const sock = makeWASocket({
         version,
         logger: P({ level: 'silent' }),
-        printQRInTerminal: true,
         auth: state,
         getMessage: async (key) => {
             return { conversation: 'hello' };
@@ -26,7 +25,7 @@ async function startBot() {
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
         if (qr) {
-            console.log('Scan the QR code below:');
+            qrcode.generate(qr, { small: true });
         }
         if (connection === 'close') {
             const shouldReconnect = (lastDisconnect.error instanceof Boom)?.output?.statusCode !== DisconnectReason.loggedOut;

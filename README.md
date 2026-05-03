@@ -7,80 +7,74 @@ Simple WhatsApp bot that auto-reacts to statuses and has basic commands.
 - `.ping` command to check if the bot is alive.
 - Session persistence (no need to scan QR code every time).
 
-## Local Setup (Windows/Mac/Linux)
+## Installation & Setup
 
-1. **Install Node.js:**
-   Download and install from [nodejs.org](https://nodejs.org/). (Recommended: LTS version).
+### 1. Requirements
+- **Node.js:** v18 or higher (LTS recommended)
+- **Git:** To clone/manage the repository
 
-2. **Clone/Download the project:**
-   Extract the files into a folder.
-
-3. **Install Dependencies:**
-   Open your terminal/command prompt in the project folder and run:
+### 2. Local Setup (Windows/Mac)
+1. Install Node.js from [nodejs.org](https://nodejs.org/).
+2. Open your terminal and run:
    ```bash
+   # Clone the repository
+   git clone https://github.com/gamitha-999/Whatsapp-BOT.git
+   cd Whatsapp-BOT
+
+   # Install dependencies
    npm install
    ```
-
-4. **Run the Bot:**
+3. Run the bot:
    ```bash
    node index.js
    ```
-
-5. **Scan QR Code:**
-   Open WhatsApp on your phone -> Linked Devices -> Link a Device and scan the QR code shown in the terminal.
+4. Scan the QR code with your WhatsApp.
 
 ---
 
 ## VPS Deployment (Ubuntu/Debian)
 
-### 1. Update and Install Node.js
-Run these commands in your VPS terminal:
+### 1. Install Node.js
+Copy and paste these commands into your VPS terminal:
 ```bash
-sudo apt update
-sudo apt upgrade -y
-
-# Install Node.js 20.x
+sudo apt update && sudo apt upgrade -y
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt-get install -y nodejs
-
-# Check version
-node -v
 ```
 
-### 2. Setup the Bot
-1. Upload your files to the VPS (except `node_modules`).
-2. Navigate to the folder:
-   ```bash
-   cd path/to/your/folder
-   ```
-3. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-### 3. Keep the Bot Running 24/7 (Using PM2)
-PM2 ensures the bot stays online even if you close the terminal.
+### 2. Install Git and Project
 ```bash
-# Install PM2 globally
-sudo npm install -g pm2
-
-# Start the bot
-pm2 start index.js --name "whatsapp-bot"
-
-# Set PM2 to start on system reboot
-pm2 startup
-pm2 save
+sudo apt-get install -y git
+git clone https://github.com/gamitha-999/Whatsapp-BOT.git
+cd Whatsapp-BOT
+npm install
 ```
 
-### 4. Other Useful PM2 Commands
-- `pm2 logs` - See real-time logs (errors/messages).
-- `pm2 status` - See if the bot is running.
-- `pm2 restart whatsapp-bot` - Restart the bot.
-- `pm2 stop whatsapp-bot` - Stop the bot.
+### 3. Keep it Running 24/7 (Using PM2)
+```bash
+sudo npm install -g pm2
+pm2 start index.js --name "wa-bot"
+pm2 save
+pm2 startup
+```
+
+### 4. Useful Commands
+- `pm2 logs` - Check real-time logs (to see the QR code if needed)
+- `pm2 restart wa-bot` - Restart the bot
+- `pm2 stop wa-bot` - Stop the bot
 
 ---
 
-## Notes
-- To change the reaction emoji, edit `index.js` line 67.
-- Make sure your VPS has a stable internet connection.
-- If you want to log in again, delete the `auth_info` folder and restart the bot.
+## Dependencies (package.json)
+The bot uses the following libraries:
+- `@whiskeysockets/baileys`: Core WhatsApp API
+- `pino`: Logger for Baileys
+- `qrcode-terminal`: To display QR code in terminal
+- `@hapi/boom`: For error handling
+
+---
+
+## Troubleshooting
+- **QR Code not appearing?** Run `node index.js` manually or check `pm2 logs`.
+- **Bot not reacting to status?** Ensure your phone is connected to the internet.
+- **Permission issues?** Use `sudo` for global npm installs or file modifications.
