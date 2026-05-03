@@ -11,7 +11,7 @@ const qrcode = require('qrcode-terminal');
 
 // Configuration
 const owners = ['94722418022@s.whatsapp.net', '94722969393@s.whatsapp.net'];
-const badwords = ['badword1', 'badword2']; // Add more bad words here
+const badwords = ['pakaya', 'fuck', 'bitch', 'shit', 'hutta']; // Add more bad words here
 
 function decodeJid(jid) {
     if (!jid) return jid;
@@ -29,7 +29,6 @@ async function startBot() {
         version,
         logger: P({ level: 'silent' }),
         auth: state,
-        printQRInTerminal: true,
         getMessage: async (key) => {
             return { conversation: 'hello' };
         }
@@ -64,10 +63,10 @@ async function startBot() {
         const from = msg.key.remoteJid;
         const isGroup = from.endsWith('@g.us');
         const type = Object.keys(msg.message)[0];
-        const content = type === 'conversation' ? msg.message.conversation : 
+        const content = (type === 'conversation' ? msg.message.conversation : 
                         type === 'extendedTextMessage' ? msg.message.extendedTextMessage.text : 
                         type === 'imageMessage' ? msg.message.imageMessage.caption : 
-                        type === 'videoMessage' ? msg.message.videoMessage.caption : '';
+                        type === 'videoMessage' ? msg.message.videoMessage.caption : '') || '';
         
         const sender = isGroup ? decodeJid(msg.key.participant) : decodeJid(from);
         const isOwner = owners.includes(sender);
