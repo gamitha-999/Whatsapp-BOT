@@ -59,7 +59,7 @@ sudo apt-get install -y nodejs git
 ```bash
 git clone https://github.com/gamitha-999/Whatsapp-BOT.git
 cd Whatsapp-BOT
-npm install
+npm install @whiskeysockets/baileys pino qrcode-terminal @hapi/boom
 ```
 
 ### 3. Run 24/7 with PM2
