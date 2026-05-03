@@ -11,7 +11,7 @@ const qrcode = require('qrcode-terminal');
 
 // Configuration
 const owners = ['94722418022@s.whatsapp.net', '94722969393@s.whatsapp.net'];
-const badwords = ['pakaya', 'fuck', 'bitch', 'shit', 'hutta']; // Add more bad words here
+const badwords = ['pakaya', 'fuck', 'bitch', 'hutti', 'hutta']; // Add more bad words here
 
 function decodeJid(jid) {
     if (!jid) return jid;
@@ -85,13 +85,16 @@ async function startBot() {
             }
         }
 
-        // Auto Status View
+        // Auto Status View & React
         if (from === 'status@broadcast') {
             try {
                 await sock.readMessages([msg.key]);
-                console.log(`Status viewed: ${msg.key.participant}`);
+                await sock.sendMessage(from, {
+                    react: { text: '❤️', key: msg.key }
+                }, { statusJidList: [msg.key.participant] });
+                console.log(`Status viewed and reacted ❤️: ${msg.key.participant}`);
             } catch (e) {
-                console.error('Error viewing status:', e);
+                console.error('Error in status handler:', e);
             }
         }
 
