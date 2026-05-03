@@ -8,10 +8,12 @@ const {
 const { Boom } = require('@hapi/boom');
 const P = require('pino');
 const qrcode = require('qrcode-terminal');
+const fs = require('fs');
 
-// Configuration
-const owners = ['94722418022@s.whatsapp.net', '94722969393@s.whatsapp.net'];
-const badwords = ['pakaya', 'fuck', 'bitch', 'hutti', 'hutta']; // Add more bad words here
+// Configuration from external file
+const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
+const owners = config.owners;
+const badwords = config.badwords;
 
 const CONFIG = {
     autoViewStatus: true,

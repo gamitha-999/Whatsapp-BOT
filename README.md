@@ -1,80 +1,88 @@
-# WhatsApp Bot Mr_Gamiya
+# WhatsApp Bot - Mr_Gamiya (v2.0)
 
-Simple WhatsApp bot with group management, anti-badword system, and auto-reaction.
-
-## Features
-- **Auto-Reaction:** Reacts `🐣` to statuses (5 seconds delay).
-- **Connection Alert:** Sends a success message when connected.
-- **Group Management:** Owner-only commands to manage group participants.
-- **Anti-Badword:** Automatically deletes messages containing bad words and warns the user.
-- **Session Persistence:** Remembers your login so you don't scan every time.
-
-## Commands
-
-### Public Commands
-- `.ping` - Check if the bot is alive.
-- `.help` - Show all available commands.
-
-### Owner Commands
-- `.add <number>` - Add a person to the group (e.g., `.add 94722xxxxxx`).
-- `.remove <tag/number>` - Remove a person from the group.
-- `.promote <tag/number>` - Make a person an admin.
-- `.demote <tag/number>` - Remove admin rights from a person.
+අලුත්ම WhatsApp Status Like (Heart) පහසුකම සහ තවත් බොහෝ දේ ඇතුළත් සරල සහ බලවත් WhatsApp බොට් කෙනෙකි.
 
 ---
 
-## Installation & Setup
+## ප්‍රධාන විශේෂාංග (Features)
 
-### 1. Requirements
-- **Node.js:** v18 or higher
-- **Git:** To clone the repository
-
-### 2. Local Setup
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/gamitha-999/Whatsapp-BOT.git
-   cd Whatsapp-BOT
-   ```
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-3. Run the bot:
-   ```bash
-   node index.js
-   ```
+- **Auto Status View:** ඔබගේ මිතුරන් දමන සියලුම Statuses ස්වයංක්‍රීයව නරඹයි (Mark as Seen).
+- **Native Status Like:** WhatsApp වල අලුතෙන්ම හඳුන්වා දුන් "Status Like" (Heart button) එක මිතුරන්ගේ Status වලට ස්වයංක්‍රීයව ලබා දෙයි. (Ghost status ඇති නොවන සේ සකසා ඇත).
+- **Anti-Badword System:** ගෲප් එකක අසභ්‍ය වචන භාවිත කරන සාමාජිකයන්ගේ පණිවිඩ මකා දමා ඔවුන්ට අනතුරු ඇඟවීම් සිදු කරයි.
+- **Group Management:** ගෲප් වලට සාමාජිකයන් එකතු කිරීම (.add), ඉවත් කිරීම (.remove), සහ Admin තනතුරු ලබා දීම (.promote/.demote) බොට් හරහා කළ හැක.
+- **External Configuration:** බොට්ගේ සියලුම සැකසුම් (Owners/Badwords) බොට් ක්‍රියාත්මක වන අතරතුර පවා `config.json` මගින් පහසුවෙන් වෙනස් කළ හැක.
 
 ---
 
-## VPS Deployment (Ubuntu/Debian)
+## විධාන (Commands)
 
-### 1. System Update & Node.js Installation
+### පොදු විධාන (Public Commands)
+- `.ping` - බොට්ගේ වේගය පරීක්ෂා කිරීමට.
+- `.help` - සියලුම විධාන ලැයිස්තුව ලබා ගැනීමට.
+
+### හිමිකරු විධාන (Owner Commands)
+- `.add <number>` - සාමාජිකයෙකු එක් කිරීමට. (උදා: `.add 94722xxxxxx`)
+- `.remove <tag/number>` - සාමාජිකයෙකු ඉවත් කිරීමට.
+- `.promote <tag/number>` - Admin තනතුර ලබා දීමට.
+- `.demote <tag/number>` - Admin තනතුර ඉවත් කිරීමට.
+
+---
+
+## Configuration (සැකසුම් සකස් කිරීම)
+
+දැන් ඔබට `index.js` වෙනස් කිරීමට අවශ්‍ය නැත. සියල්ල `config.json` මගින් කළ හැක:
+
+```json
+{
+    "owners": ["94722xxxxxx@s.whatsapp.net"],
+    "badwords": ["word1", "word2"]
+}
+```
+
+---
+
+## Linux VPS Setup (Ubuntu/Debian)
+
+ඔබගේ Linux VPS එකට බොට් ඇතුළත් කිරීමට පහත පියවර අනුගමනය කරන්න.
+
+### 1. අවසාදිත මෘදුකාංග ස්ථාපනය (System Update & Dependencies)
 ```bash
 sudo apt update && sudo apt upgrade -y
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt-get install -y nodejs git
 ```
 
-### 2. Project Setup
+### 2. බොට් ඩවුන්ලෝඩ් කර ගැනීම (Clone Project)
 ```bash
 git clone https://github.com/gamitha-999/Whatsapp-BOT.git
 cd Whatsapp-BOT
+```
+
+### 3. අවශ්‍ය Module ස්ථාපනය (Install Modules)
+```bash
 npm install @whiskeysockets/baileys pino qrcode-terminal @hapi/boom
 ```
 
-### 3. Run 24/7 with PM2
+### 4. බොට් ක්‍රියාත්මක කිරීම (Run Bot)
+පළමු වරට බොට් ක්‍රියාත්මක කර QR Code එක ස්කෑන් කරන්න:
+```bash
+node index.js
+```
+
+### 5. 24/7 ක්‍රියාත්මක කර තැබීම (Using PM2)
+බොට් එක නතර නොවී දිගටම වැඩ කිරීමට PM2 පාවිච්චි කරන්න:
 ```bash
 sudo npm install -g pm2
-pm2 start index.js --name "wa-bot"
+pm2 start index.js --name "gamiya-bot"
 pm2 save
 pm2 startup
 ```
 
 ---
 
-## Configuration
-Open `index.js` to modify:
-- `owners`: Add your WhatsApp numbers (with country code).
-- `badwords`: Add words you want to block in groups.
+## වැදගත් (Important)
 
-> Created by Mr_Gamiya
+- **Ghost Status Fix:** මෙම බොට් එකේ Reaction එක යන්නේ Status එක දාපු කෙනාට පණිවිඩයක් ලෙස නොව, සැබෑ "Like" එකක් ලෙස බැවින් ඔබේ පැත්තෙන් Ghost status හැදෙන්නේ නැත.
+- **Privacy:** `config.json` එකට ඔබේ අංකය ඇතුළත් කරන විට `947... @s.whatsapp.net` ආකාරයට ඇතුළත් කරන්න.
+
+> Created with ❤️ by Mr_Gamiya

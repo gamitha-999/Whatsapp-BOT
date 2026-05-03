@@ -1,3 +1,4 @@
 node_modules
 auth_info
 package-lock.json
+config.json
