@@ -16,14 +16,14 @@
 ## විධාන (Commands)
 
 ### පොදු විධාන (Public Commands)
-- `.ping` - බොට්ගේ වේගය පරීක්ෂා කිරීමට.
-- `.help` - සියලුම විධාන ලැයිස්තුව ලබා ගැනීමට.
+- `/ping` - බොට්ගේ වේගය පරීක්ෂා කිරීමට.
+- `/help` - සියලුම විධාන ලැයිස්තුව ලබා ගැනීමට.
 
 ### හිමිකරු විධාන (Owner Commands)
-- `.add <number>` - සාමාජිකයෙකු එක් කිරීමට. (උදා: `.add 94722xxxxxx`)
-- `.remove <tag/number>` - සාමාජිකයෙකු ඉවත් කිරීමට.
-- `.promote <tag/number>` - Admin තනතුර ලබා දීමට.
-- `.demote <tag/number>` - Admin තනතුර ඉවත් කිරීමට.
+- `/add <number>` - සාමාජිකයෙකු එක් කිරීමට. (උදා: `.add 94722xxxxxx`)
+- `/remove <tag/number>` - සාමාජිකයෙකු ඉවත් කිරීමට.
+- `/promote <tag/number>` - Admin තනතුර ලබා දීමට.
+- `/demote <tag/number>` - Admin තනතුර ඉවත් කිරීමට.
 
 ---
 
@@ -84,4 +84,4 @@ pm2 startup
 - **Ghost Status Fix:** මෙම බොට් එකේ Reaction එක යන්නේ Status එක දාපු කෙනාට පණිවිඩයක් ලෙස නොව, සැබෑ "Like" එකක් ලෙස බැවින් ඔබේ පැත්තෙන් Ghost status හැදෙන්නේ නැත.
 - **Privacy:** `config.json` එකට ඔබේ අංකය ඇතුළත් කරන විට `947... @s.whatsapp.net` ආකාරයට ඇතුළත් කරන්න.
 
-> Created with ❤️ by Mr_Gamiya
+> Created❤️ by Mr_Gamiya
