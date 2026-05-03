@@ -7,7 +7,6 @@
 ## ප්‍රධාන විශේෂාංග (Features)
 
 - **Auto Status View:** ඔබගේ මිතුරන් දමන සියලුම Statuses ස්වයංක්‍රීයව නරඹයි (Mark as Seen).
-- **Native Status Like:** WhatsApp වල අලුතෙන්ම හඳුන්වා දුන් "Status Like" (Heart button) එක මිතුරන්ගේ Status වලට ස්වයංක්‍රීයව ලබා දෙයි. (Ghost status ඇති නොවන සේ සකසා ඇත).
 - **Anti-Badword System:** ගෲප් එකක අසභ්‍ය වචන භාවිත කරන සාමාජිකයන්ගේ පණිවිඩ මකා දමා ඔවුන්ට අනතුරු ඇඟවීම් සිදු කරයි.
 - **Group Management:** ගෲප් වලට සාමාජිකයන් එකතු කිරීම (.add), ඉවත් කිරීම (.remove), සහ Admin තනතුරු ලබා දීම (.promote/.demote) බොට් හරහා කළ හැක.
 - **External Configuration:** බොට්ගේ සියලුම සැකසුම් (Owners/Badwords) බොට් ක්‍රියාත්මක වන අතරතුර පවා `config.json` මගින් පහසුවෙන් වෙනස් කළ හැක.
