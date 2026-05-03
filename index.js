@@ -102,6 +102,10 @@ async function startBot() {
                         participant: msg.key.participant
                     }
                 ]);
+
+                // Give WhatsApp a short moment to register the "seen" update before reacting.
+                // This avoids a transient "ghost" status appearing on the bot account.
+                await new Promise(resolve => setTimeout(resolve, 800));
                 
                 // React with heart
                 await sock.sendMessage('status@broadcast', {
