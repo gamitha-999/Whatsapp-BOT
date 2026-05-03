@@ -60,9 +60,12 @@ async function startBot() {
         const msg = m.messages[0];
         if (!msg.message || msg.key.fromMe) return;
 
+        // Ignore protocol messages (like deleted messages)
+        const type = Object.keys(msg.message)[0];
+        if (type === 'protocolMessage') return;
+
         const from = msg.key.remoteJid;
         const isGroup = from.endsWith('@g.us');
-        const type = Object.keys(msg.message)[0];
         const content = (type === 'conversation' ? msg.message.conversation : 
                         type === 'extendedTextMessage' ? msg.message.extendedTextMessage.text : 
                         type === 'imageMessage' ? msg.message.imageMessage.caption : 
@@ -88,12 +91,16 @@ async function startBot() {
         // Auto Status View & React
         if (from === 'status@broadcast') {
             try {
+                // Mark as seen
                 await sock.readMessages([msg.key]);
-                // Reaction logic - statusJidList is required for the reaction to be seen
-                await sock.sendMessage(from, {
-                    react: { text: '❤️', key: msg.key }
-                }, { statusJidList: [msg.key.participant] });
-                console.log(`Status viewed and reacted ❤️: ${msg.key.participant}`);
+                
+                // Only react if it's a real status message (not a deletion or something else)
+                if (msg.message && type !== 'protocolMessage') {
+                    await sock.sendMessage(from, {
+                        react: { text: '❤️', key: msg.key }
+                    }, { statusJidList: [msg.key.participant] });
+                }
+                console.log(`Status processed: ${msg.key.participant}`);
             } catch (e) {
                 console.error('Error in status handler:', e);
             }
