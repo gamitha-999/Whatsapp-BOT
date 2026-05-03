@@ -1,87 +1,83 @@
-# WhatsApp Bot - Mr_Gamiya (v2.0)
+# WhatsApp Multi-Account Bot - Mr_Gamiya
 
-අලුත්ම WhatsApp Status Like (Heart) පහසුකම සහ තවත් බොහෝ දේ ඇතුළත් සරල සහ බලවත් WhatsApp බොට් කෙනෙකි.
-
----
-
-## ප්‍රධාන විශේෂාංග (Features)
-
-- **Auto Status View:** ඔබගේ මිතුරන් දමන සියලුම Statuses ස්වයංක්‍රීයව නරඹයි (Mark as Seen).
-- **Anti-Badword System:** ගෲප් එකක අසභ්‍ය වචන භාවිත කරන සාමාජිකයන්ගේ පණිවිඩ මකා දමා ඔවුන්ට අනතුරු ඇඟවීම් සිදු කරයි.
-- **Group Management:** ගෲප් වලට සාමාජිකයන් එකතු කිරීම (.add), ඉවත් කිරීම (.remove), සහ Admin තනතුරු ලබා දීම (.promote/.demote) බොට් හරහා කළ හැක.
-- **External Configuration:** බොට්ගේ සියලුම සැකසුම් (Owners/Badwords) බොට් ක්‍රියාත්මක වන අතරතුර පවා `config.json` මගින් පහසුවෙන් වෙනස් කළ හැක.
+A powerful WhatsApp bot built with `@whiskeysockets/baileys` that supports multiple accounts simultaneously using pairing codes.
 
 ---
 
-## විධාන (Commands)
+## 🚀 Features
 
-### පොදු විධාන (Public Commands)
-- `/ping` - බොට්ගේ වේගය පරීක්ෂා කිරීමට.
-- `/help` - සියලුම විධාන ලැයිස්තුව ලබා ගැනීමට.
-
-### හිමිකරු විධාන (Owner Commands)
-- `/add <number>` - සාමාජිකයෙකු එක් කිරීමට. (උදා: `.add 94722xxxxxx`)
-- `/remove <tag/number>` - සාමාජිකයෙකු ඉවත් කිරීමට.
-- `/promote <tag/number>` - Admin තනතුර ලබා දීමට.
-- `/demote <tag/number>` - Admin තනතුර ඉවත් කිරීමට.
+- **Multi-Account Support:** Link and run multiple WhatsApp accounts at the same time.
+- **Pairing Code Login:** No need to scan QR codes; use the pairing code for easy linking.
+- **Auto Status View & React:** Automatically view status updates and react with a custom emoji.
+- **Anti-Badword System:** Automatically deletes messages containing prohibited words in groups (requires Bot Admin).
+- **Group Management:** Easily promote or demote members via chat commands.
+- **CLI Interface:** Built-in terminal interface for managing sessions.
 
 ---
 
-## Configuration (සැකසුම් සකස් කිරීම)
+## 🛠 Installation
 
-දැන් ඔබට `index.js` වෙනස් කිරීමට අවශ්‍ය නැත. සියල්ල `config.json` මගින් කළ හැක:
-
-```json
-{
-    "owners": ["94722xxxxxx@s.whatsapp.net"],
-    "badwords": ["word1", "word2"]
-}
-```
-
----
-
-## Linux VPS Setup (Ubuntu/Debian)
-
-ඔබගේ Linux VPS එකට බොට් ඇතුළත් කිරීමට පහත පියවර අනුගමනය කරන්න.
-
-### 1. අවසාදිත මෘදුකාංග ස්ථාපනය (System Update & Dependencies)
-```bash
-sudo apt update && sudo apt upgrade -y
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs git
-```
-
-### 2. බොට් ඩවුන්ලෝඩ් කර ගැනීම (Clone Project)
+### 1. Clone the Repository
 ```bash
 git clone https://github.com/gamitha-999/Whatsapp-BOT.git
 cd Whatsapp-BOT
 ```
 
-### 3. අවශ්‍ය Module ස්ථාපනය (Install Modules)
+### 2. Install Dependencies
 ```bash
-npm install @whiskeysockets/baileys pino qrcode-terminal @hapi/boom
+npm install
 ```
 
-### 4. බොට් ක්‍රියාත්මක කිරීම (Run Bot)
-පළමු වරට බොට් ක්‍රියාත්මක කර QR Code එක ස්කෑන් කරන්න:
+### 3. Start the Bot
 ```bash
-node index.js
-```
-
-### 5. 24/7 ක්‍රියාත්මක කර තැබීම (Using PM2)
-බොට් එක නතර නොවී දිගටම වැඩ කිරීමට PM2 පාවිච්චි කරන්න:
-```bash
-sudo npm install -g pm2
-pm2 start index.js --name "gamiya-bot"
-pm2 save
-pm2 startup
+npm start
 ```
 
 ---
 
-## වැදගත් (Important)
+## 💻 CLI Commands
 
-- **Ghost Status Fix:** මෙම බොට් එකේ Reaction එක යන්නේ Status එක දාපු කෙනාට පණිවිඩයක් ලෙස නොව, සැබෑ "Like" එකක් ලෙස බැවින් ඔබේ පැත්තෙන් Ghost status හැදෙන්නේ නැත.
-- **Privacy:** `config.json` එකට ඔබේ අංකය ඇතුළත් කරන විට `947... @s.whatsapp.net` ආකාරයට ඇතුළත් කරන්න.
+When you run the bot, you can use the following commands in the terminal:
 
-> Created❤️ by Mr_Gamiya
+- `code <number>` - Link a new account using a pairing code. (Example: `code 947xxxxxxxx`)
+- `start` - Start all linked bot sessions.
+- `list` - List all currently linked phone numbers.
+- `unlink <number>` - Remove a linked account and delete its session data.
+- `clear` - Clear the terminal and show the welcome screen.
+
+---
+
+## 💬 In-Chat Commands
+
+These commands can be used within WhatsApp:
+
+- `/ping` - Check if the bot is active.
+- `/help` - Show the help menu.
+- `/sessions` - (Owner only) List all linked sessions.
+- `/promote` - (Owner & Group only) Promote a user to admin (tag or reply).
+- `/demote` - (Owner & Group only) Demote an admin (tag or reply).
+
+---
+
+## ⚙️ Configuration
+
+You can customize the bot by editing the configuration section in `index.js`:
+
+```javascript
+const OWNERS = ["94722418022@s.whatsapp.net", "94722969393@s.whatsapp.net"];
+const BAD_WORDS = ['fuck', 'sex', 'porn', 'xxx', 'hutto', 'pako', 'ponnaya'];
+const CONFIG = {
+    autoViewStatus: true,
+    autoReactStatus: true,
+    statusEmoji: '👻'
+};
+```
+
+---
+
+## ⚠️ Requirements
+
+- Node.js 20.x or higher
+- A stable internet connection
+
+> Created with ❤️ by [Mr_Gamiya](https://github.com/gamitha-999)
