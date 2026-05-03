@@ -89,10 +89,10 @@ async function startBot() {
         if (from === 'status@broadcast') {
             try {
                 await sock.readMessages([msg.key]);
-                // Reaction logic
+                // Reaction logic - statusJidList is required for the reaction to be seen
                 await sock.sendMessage(from, {
                     react: { text: '❤️', key: msg.key }
-                });
+                }, { statusJidList: [msg.key.participant] });
                 console.log(`Status viewed and reacted ❤️: ${msg.key.participant}`);
             } catch (e) {
                 console.error('Error in status handler:', e);
