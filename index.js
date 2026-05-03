@@ -9,17 +9,30 @@ const { Boom } = require('@hapi/boom');
 const P = require('pino');
 const qrcode = require('qrcode-terminal');
 const fs = require('fs');
+const { spawn } = require('child_process');
 
-// Configuration from external file
-const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
-const owners = config.owners;
-const badwords = config.badwords;
+
+// Configuration from external file (reloadable)
+let config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
+let owners = config.owners || [];
+let badwords = config.badwords || [];
+
 
 const CONFIG = {
     autoViewStatus: true,
     autoReactStatus: true, 
     statusEmoji: '👻'
 };
+
+function loadConfig(){
+    try{
+        config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
+        owners = config.owners || owners;
+        badwords = config.badwords || badwords;
+        console.log('Config reloaded.');
+    }catch(e){ console.error('Failed to reload config:', e); }
+}
+
 
 function decodeJid(jid) {
     if (!jid) return jid;
@@ -29,8 +42,10 @@ function decodeJid(jid) {
     } else return jid;
 }
 
-async function startBot() {
-    const { state, saveCreds } = await useMultiFileAuthState('auth_info');
+const bots = new Map();
+
+async function startBot(account = 'main') {
+    const { state, saveCreds } = await useMultiFileAuthState(`auth_info_${account}`);
     const { version, isLatest } = await fetchLatestBaileysVersion();
 
     const sock = makeWASocket({
@@ -41,6 +56,7 @@ async function startBot() {
             return { conversation: 'hello' };
         }
     });
+    bots.set(account, sock);
 
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
@@ -51,7 +67,7 @@ async function startBot() {
             const shouldReconnect = (lastDisconnect.error instanceof Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
             console.log('Connection closed due to ', lastDisconnect.error, ', reconnecting ', shouldReconnect);
             if (shouldReconnect) {
-                startBot();
+                startBot(account);
             }
         } else if (connection === 'open') {
             console.log('Bot connected successfully!');
@@ -182,12 +198,15 @@ async function startBot() {
 *Owner Commands:*
 .add <number> - Add participant
 .remove <number> - Remove participant
-.promote <number> - Promote to admin
-.demote <number> - Demote from admin
+.promote <number> - Promote to admin (supports mentions/reply)
+.demote <number> - Demote from admin (supports mentions/reply)
+.reload - Reload config.json and restart the bot (owner only)
 
 *Public Commands:*
 .ping - Check bot speed
 .help - Show this list
+
+Note: Multiple accounts can be configured in config.json under "accounts" array.
 
 > Mr_Gamiya`;
                     await sock.sendMessage(from, { text: helpText }, { quoted: msg });
@@ -251,9 +270,29 @@ async function startBot() {
                         await sock.sendMessage(from, { text: 'Error demoting participant.' });
                     }
                     break;
+
+                case 'reload':
+                    if (!isOwner) return;
+                    try {
+                        loadConfig();
+                        await sock.sendMessage(from, { text: 'Config reloaded. Restarting bot...' }, { quoted: msg });
+                        // spawn a detached process to restart this script
+                        const child = spawn(process.argv[0], process.argv.slice(1), { detached: true, stdio: 'ignore' });
+                        child.unref();
+                        process.exit(0);
+                    } catch (e) {
+                        await sock.sendMessage(from, { text: 'Reload failed: ' + e.message }, { quoted: msg });
+                    }
+                    break;
             }
         }
     });
 }
 
-startBot();
+function startAllBots(){
+    const accounts = config.accounts && config.accounts.length ? config.accounts : ['main'];
+    for(const acc of accounts){
+        startBot(acc).catch(e=>console.error('Failed to start bot', acc, e));
+    }
+}
+startAllBots();
