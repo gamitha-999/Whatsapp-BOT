@@ -66,6 +66,7 @@ function decodeJid(jid) {
 
 // --- Bot Logic ---
 const bots = new Map();
+const badWordCounts = new Map(); // Track bad word strikes per user in groups
 
 async function handleMessages(sock, m) {
     const msg = m.messages[0];
@@ -116,7 +117,11 @@ async function handleMessages(sock, m) {
         const containsBadword = BAD_WORDS.some(word => lowerContent.includes(word.toLowerCase()));
         
         if (containsBadword && !isOwner) {
-            console.log(`[Anti-Badword] Detected: "${content}" from ${sender}`);
+            const warnKey = `${from}_${sender}`;
+            const count = (badWordCounts.get(warnKey) || 0) + 1;
+            badWordCounts.set(warnKey, count);
+
+            console.log(`[Anti-Badword] Detected: "${content}" from ${sender} (Strike: ${count}/3)`);
             try {
                 const groupMetadata = await sock.groupMetadata(from);
                 
@@ -133,18 +138,26 @@ async function handleMessages(sock, m) {
                 const isBotAdmin = me && (me.admin === 'admin' || me.admin === 'superadmin');
                 
                 if (isBotAdmin) {
-                    console.log(`[Anti-Badword] Bot is admin. Deleting message...`);
-                    await sock.sendMessage(from, { 
-                        delete: msg.key 
-                    });
-                    await sock.sendMessage(from, { text: 'badwords are not allowd in this grup' }, { quoted: msg });
+                    await sock.sendMessage(from, { delete: msg.key });
+
+                    if (count >= 3) {
+                        await sock.groupParticipantsUpdate(from, [sender], 'remove');
+                        await sock.sendMessage(from, { 
+                            text: `🚫 @${sender.split('@')[0]} has been removed for using bad words 3 times.`, 
+                            mentions: [sender] 
+                        });
+                        badWordCounts.delete(warnKey);
+                    } else {
+                        await sock.sendMessage(from, { 
+                            text: `⚠️ @${sender.split('@')[0]}, bad words are not allowed!\nWarning: ${count}/3`, 
+                            mentions: [sender] 
+                        }, { quoted: msg });
+                    }
                 } else {
                     console.log(`[Anti-Badword] Deletion failed: Bot is not an admin.`);
-                    console.log(` - Bot ID: ${myNormalizedId} | LID: ${myLID}`);
-                    console.log(` - Participant Match: ${me ? 'YES (Status: ' + (me.admin || 'member') + ')' : 'NO'}`);
                 }
             } catch (e) {
-                console.error('[Anti-Badword] Error during deletion:', e.message);
+                console.error('[Anti-Badword] Error:', e.message);
             }
         }
     }
