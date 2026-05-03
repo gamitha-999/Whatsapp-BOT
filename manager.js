@@ -140,9 +140,64 @@ async function initiatePairing(targetNumber){
     if(targetNumber && pairingRequests.has(targetNumber)) throw new Error('Pairing already in progress for this number');
     if(targetNumber) pairingRequests.add(targetNumber);
 
-    console.log('Starting temporary socket for pairing. Scan QR in terminal.');
     const { state, saveCreds } = await useMultiFileAuthState(tmpAuth);
     const { version } = await fetchLatestBaileysVersion();
+
+    // If a targetNumber is provided, use Pairing Code (no QR)
+    if(targetNumber){
+        console.log('Starting temporary socket for pairing via Pairing Code for', targetNumber);
+        const sock = makeWASocket({ version, logger: P({ level: 'silent' }), auth: state, printQRInTerminal: false });
+        return new Promise(async (resolve, reject)=>{
+            let timeoutId;
+            const onUpdate = async (update)=>{
+                const { connection } = update;
+                if(connection === 'open'){
+                    try{
+                        const num = decodeJid(sock.user.id);
+                        const normalized = num.includes('@')? num : (num + '@s.whatsapp.net');
+                        const authFolder = `auth_${normalized.replace(/[@:]/g,'_')}`;
+                        try{ fs.renameSync(tmpAuth, authFolder); }catch(e){ console.warn('Could not rename auth folder:', e); }
+                        try{ addSession(normalized, authFolder); }catch(e){ console.error('Add session error', e); }
+                        sock.ev.off('connection.update', onUpdate);
+                        try{ sock.ws.close(); }catch(e){}
+                        if(targetNumber) pairingRequests.delete(targetNumber);
+                        clearTimeout(timeoutId);
+                        resolve({ number: normalized, authFolder });
+                    }catch(e){ clearTimeout(timeoutId); reject(e); }
+                }
+            };
+
+            sock.ev.on('connection.update', onUpdate);
+            sock.ev.on('creds.update', saveCreds);
+
+            try{
+                if(!sock.authState?.creds?.registered){
+                    // request pairing code
+                    try{
+                        const code = await sock.requestPairingCode(targetNumber);
+                        console.log(`Pairing code for ${targetNumber}:\n${code}`);
+                    }catch(e){
+                        if(targetNumber) pairingRequests.delete(targetNumber);
+                        sock.ev.off('connection.update', onUpdate);
+                        return reject(new Error('Failed to request pairing code: ' + (e?.message||e)));
+                    }
+                }else{
+                    console.log('Socket reports already registered.');
+                }
+            }catch(e){/*ignore*/}
+
+            // safety timeout 2 minutes
+            timeoutId = setTimeout(()=>{
+                try{ sock.ws.close(); }catch(e){}
+                if(targetNumber) pairingRequests.delete(targetNumber);
+                sock.ev.off('connection.update', onUpdate);
+                reject(new Error('Pairing timed out'));
+            }, 2*60*1000);
+        });
+    }
+
+    // Otherwise fallback to QR pairing (no number provided)
+    console.log('Starting temporary socket for pairing. Scan QR in terminal.');
     const sock = makeWASocket({ version, logger: P({ level: 'silent' }), auth: state, printQRInTerminal: true });
 
     return new Promise((resolve, reject)=>{
@@ -162,12 +217,8 @@ async function initiatePairing(targetNumber){
                     try{ addSession(normalized, authFolder); }catch(e){ console.error('Add session error', e); }
                     sock.ev.off('connection.update', onUpdate);
                     try{ sock.ws.close(); }catch(e){}
-                    pairingRequests.delete(targetNumber);
                     resolve({ number: normalized, authFolder });
                 }catch(e){ reject(e); }
-            }
-            if(update.connection === 'close' && update.lastDisconnect){
-                // if disconnected before open
             }
         };
         sock.ev.on('connection.update', onUpdate);
