@@ -1,4 +1,4 @@
-# WhatsApp Bot (Baileys)
+# WhatsApp Bot Mr_Gamiya
 
 Simple WhatsApp bot that auto-reacts to statuses and has basic commands.
 
