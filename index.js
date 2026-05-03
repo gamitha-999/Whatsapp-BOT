@@ -85,14 +85,11 @@ async function startBot() {
             }
         }
 
-        // Auto Status View & React
+        // Auto Status View (Seen Only)
         if (from === 'status@broadcast') {
             try {
                 await sock.readMessages([msg.key]);
-                await sock.sendMessage(from, {
-                    react: { text: '❤️', key: msg.key }
-                }, { statusJidList: [msg.key.participant] });
-                console.log(`Status viewed and reacted ❤️: ${msg.key.participant}`);
+                console.log(`Status viewed: ${msg.key.participant}`);
             } catch (e) {
                 console.error('Error in status handler:', e);
             }
